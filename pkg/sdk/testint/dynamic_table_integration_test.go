@@ -29,7 +29,7 @@ func TestInt_DynamicTableCreateAndDrop(t *testing.T) {
 		}
 		query := "select id from " + tableTest.ID().FullyQualifiedName()
 		comment := random.Comment()
-		err := client.DynamicTables.Create(ctx, sdk.NewCreateDynamicTableRequest(name, testClientHelper().Ids.WarehouseId(), targetLag, query).WithOrReplace(true).WithComment(&comment))
+		err := client.DynamicTables.Create(ctx, sdk.NewCreateDynamicTableRequest(name, testClientHelper().Ids.WarehouseId(), targetLag, query).WithComment(&comment))
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			err = client.DynamicTables.Drop(ctx, sdk.NewDropDynamicTableRequest(name))
@@ -77,7 +77,7 @@ func TestInt_DynamicTableCreateAndDrop(t *testing.T) {
 		}
 		query := "select id from " + tableTest.ID().FullyQualifiedName()
 		comment := random.Comment()
-		err := client.DynamicTables.Create(ctx, sdk.NewCreateDynamicTableRequest(id, testClientHelper().Ids.WarehouseId(), targetLag, query).WithOrReplace(true).WithComment(&comment))
+		err := client.DynamicTables.Create(ctx, sdk.NewCreateDynamicTableRequest(id, testClientHelper().Ids.WarehouseId(), targetLag, query).WithComment(&comment))
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			err = client.DynamicTables.Drop(ctx, sdk.NewDropDynamicTableRequest(id))
@@ -105,7 +105,7 @@ func TestInt_DynamicTableCreateAndDrop(t *testing.T) {
 		comment := random.Comment()
 		refreshMode := sdk.DynamicTableRefreshModeFull
 		initialize := sdk.DynamicTableInitializeOnSchedule
-		err := client.DynamicTables.Create(ctx, sdk.NewCreateDynamicTableRequest(id, testClientHelper().Ids.WarehouseId(), targetLag, query).WithOrReplace(true).WithInitialize(initialize).WithRefreshMode(refreshMode).WithComment(&comment))
+		err := client.DynamicTables.Create(ctx, sdk.NewCreateDynamicTableRequest(id, testClientHelper().Ids.WarehouseId(), targetLag, query).WithInitialize(initialize).WithRefreshMode(refreshMode).WithComment(&comment))
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			err = client.DynamicTables.Drop(ctx, sdk.NewDropDynamicTableRequest(id))
@@ -242,7 +242,7 @@ func TestInt_DynamicTablesShowByID(t *testing.T) {
 			MaximumDuration: sdk.String("2 minutes"),
 		}
 		query := "select id from " + tableTest.ID().FullyQualifiedName()
-		err := client.DynamicTables.Create(ctx, sdk.NewCreateDynamicTableRequest(id, warehouseId, targetLag, query).WithOrReplace(true))
+		err := client.DynamicTables.Create(ctx, sdk.NewCreateDynamicTableRequest(id, warehouseTest.ID(), targetLag, query).WithOrReplace(true))
 		require.NoError(t, err)
 		t.Cleanup(cleanupDynamicTableHandle(t, id))
 	}

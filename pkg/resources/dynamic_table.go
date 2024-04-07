@@ -26,7 +26,7 @@ var dynamicTableSchema = map[string]*schema.Schema{
 	"or_replace": {
 		Type:        schema.TypeBool,
 		Optional:    true,
-		Description: "Specifies whether to replace the dynamic table if it already exists.",
+		Description: "This argument is deprecated and setting it has no effect. All dynamic tables are created with `CREATE OR REPLACE`",
 		Default:     false,
 	},
 	"name": {
@@ -75,7 +75,6 @@ var dynamicTableSchema = map[string]*schema.Schema{
 	"query": {
 		Type:             schema.TypeString,
 		Required:         true,
-		ForceNew:         true,
 		Description:      "Specifies the query to use to populate the dynamic table.",
 		DiffSuppressFunc: DiffSuppressStatement,
 	},
@@ -90,7 +89,6 @@ var dynamicTableSchema = map[string]*schema.Schema{
 		Default:      sdk.DynamicTableRefreshModeAuto,
 		Description:  "INCREMENTAL to use incremental refreshes, FULL to recompute the whole table on every refresh, or AUTO to let Snowflake decide.",
 		ValidateFunc: validation.StringInSlice(sdk.AsStringList(sdk.AllDynamicRefreshModes), true),
-		ForceNew:     true,
 	},
 	"initialize": {
 		Type:         schema.TypeString,
@@ -219,15 +217,6 @@ func ReadDynamicTable(ctx context.Context, d *schema.ResourceData, meta any) dia
 			return diag.FromErr(err)
 		}
 	}
-	if strings.Contains(dynamicTable.Text, "OR REPLACE") {
-		if err := d.Set("or_replace", true); err != nil {
-			return diag.FromErr(err)
-		}
-	} else {
-		if err := d.Set("or_replace", false); err != nil {
-			return diag.FromErr(err)
-		}
-	}
 	if strings.Contains(dynamicTable.Text, "initialize = 'ON_CREATE'") {
 		if err := d.Set("initialize", "ON_CREATE"); err != nil {
 			return diag.FromErr(err)
@@ -313,30 +302,13 @@ func parseTargetLag(v interface{}) sdk.TargetLag {
 
 // CreateDynamicTable implements schema.CreateFunc.
 func CreateDynamicTable(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
-	client := meta.(*provider.Context).Client
-
 	databaseName := d.Get("database").(string)
 	schemaName := d.Get("schema").(string)
 	name := d.Get("name").(string)
 	id := sdk.NewSchemaObjectIdentifier(databaseName, schemaName, name)
 
-	warehouse := sdk.NewAccountObjectIdentifier(d.Get("warehouse").(string))
-	tl := parseTargetLag(d.Get("target_lag"))
-	query := d.Get("query").(string)
-
-	request := sdk.NewCreateDynamicTableRequest(id, warehouse, tl, query)
-	if v, ok := d.GetOk("comment"); ok {
-		request.WithComment(sdk.String(v.(string)))
-	}
-	if v, ok := d.GetOk("or_replace"); ok && v.(bool) {
-		request.WithOrReplace(true)
-	}
-	if v, ok := d.GetOk("refresh_mode"); ok {
-		request.WithRefreshMode(sdk.DynamicTableRefreshMode(v.(string)))
-	}
-	if v, ok := d.GetOk("initialize"); ok {
-		request.WithInitialize(sdk.DynamicTableInitialize(v.(string)))
-	}
+	request := fullCreateDynamicTableRequest(id, d)
+	client := meta.(*provider.Context).Client
 	if err := client.DynamicTables.Create(ctx, request); err != nil {
 		return diag.FromErr(err)
 	}
@@ -349,6 +321,22 @@ func CreateDynamicTable(ctx context.Context, d *schema.ResourceData, meta any) d
 func UpdateDynamicTable(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
 	client := meta.(*provider.Context).Client
 	id := helpers.DecodeSnowflakeID(d.Id()).(sdk.SchemaObjectIdentifier)
+
+	// For many dynamic table attributes, we can use an `ALTER DYNAMIC TABLE`
+	// statement to update the attribute. However, if the query or refresh_mode
+	// changes, we need to replace the whole dynamic table with `CREATE OR REPLACE`.
+	// This is a destructive action as the data stored on disk is dropped and
+	// recreated, but this is different from dropping and recreating the dynamic
+	// table in that the previous version of the dynamic table is left intact and
+	// accessible until execution completes.
+	if d.HasChange("query") || d.HasChange("refresh_mode") {
+		request := fullCreateDynamicTableRequest(id, d)
+		if err := client.DynamicTables.Create(context.Background(), request); err != nil {
+			return diag.FromErr(err)
+		}
+		return ReadDynamicTable(ctx, d, meta)
+	}
+
 	request := sdk.NewAlterDynamicTableRequest(id)
 
 	runSet := false
@@ -396,4 +384,24 @@ func DeleteDynamicTable(ctx context.Context, d *schema.ResourceData, meta any) d
 	d.SetId("")
 
 	return nil
+}
+
+func fullCreateDynamicTableRequest(id sdk.SchemaObjectIdentifier, d *schema.ResourceData) *sdk.CreateDynamicTableRequest {
+	d.SetId(helpers.EncodeSnowflakeID(id))
+
+	warehouse := sdk.NewAccountObjectIdentifier(d.Get("warehouse").(string))
+	tl := parseTargetLag(d.Get("target_lag"))
+	query := d.Get("query").(string)
+
+	request := sdk.NewCreateDynamicTableRequest(id, warehouse, tl, query)
+	if v, ok := d.GetOk("comment"); ok {
+		request.WithComment(sdk.String(v.(string)))
+	}
+	if v, ok := d.GetOk("refresh_mode"); ok {
+		request.WithRefreshMode(sdk.DynamicTableRefreshMode(v.(string)))
+	}
+	if v, ok := d.GetOk("initialize"); ok {
+		request.WithInitialize(sdk.DynamicTableInitialize(v.(string)))
+	}
+	return request
 }
