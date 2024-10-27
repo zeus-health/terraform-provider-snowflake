@@ -1,20 +1,14 @@
+project_name: terraform-provider-snowflake
+
 builds:
 - env:
-  - >-
-    {{- if or (eq .Os "windows") (eq .Os "darwin") -}}
-      CGO_ENABLED=1
-    {{- else -}}
-      CGO_ENABLED=0
-    {{- end -}}
+    - CGO_ENABLED=0
   goos:
-    - windows
     - linux
     - darwin
-    - freebsd
   goarch:
     - amd64
     - arm64
-    - '386'
   flags:
     - -trimpath
   binary: '{{ .ProjectName }}_v{{ .Version }}'
@@ -24,9 +18,6 @@ archives:
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 
 checksum:
-  extra_files:
-    - glob: 'terraform-registry-manifest.json'
-      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
   name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
   algorithm: sha256
 
@@ -42,9 +33,7 @@ signs:
       - "${artifact}"
 
 release:
-  github:
-    owner: Snowflake-Labs
-    name: terraform-provider-snowflake
-  extra_files:
-    - glob: 'terraform-registry-manifest.json'
-      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+  skip_upload: true
+
+changelog:
+  disable: true
